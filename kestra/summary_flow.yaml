@@ -1,0 +1,210 @@
+id: ai_ecosystem_analysis
+namespace: hackathon
+description: "AI Agent analyzes survival strategies from 100 autonomous agents"
+
+# Trigger: Run every hour or on-demand
+triggers:
+  - id: hourly_analysis
+    type: io.kestra.core.models.triggers.types.Schedule
+    cron: "0 * * * *"
+
+inputs:
+  - id: data_path
+    type: STRING
+    defaults: "../data/survival_data.json"
+    description: "Path to survival data JSON file"
+
+tasks:
+  # Task 1: Read survival data from local file
+  - id: read_survival_data
+    type: io.kestra.plugin.fs.http.Download
+    description: "Load agent survival statistics"
+    uri: "file://{{ inputs.data_path }}"
+    
+  # Task 2: Parse JSON data
+  - id: parse_data
+    type: io.kestra.plugin.core.flow.Sequential
+    description: "Extract episode statistics"
+    tasks:
+      - id: json_parser
+        type: io.kestra.plugin.serdes.json.JsonToJson
+        from: "{{ outputs.read_survival_data.uri }}"
+
+  # Task 3: Calculate aggregated metrics
+  - id: calculate_metrics
+    type: io.kestra.plugin.scripts.python.Script
+    description: "Compute survival trends and performance metrics"
+    containerImage: python:3.11-slim
+    script: |
+      import json
+      import statistics
+      
+      # Read parsed data
+      with open('{{ outputs.parse_data.uri }}', 'r') as f:
+          data = json.load(f)
+      
+      episodes = data.get('episodes', [])
+      
+      if not episodes:
+          print("No episode data available")
+          exit(0)
+      
+      # Calculate aggregate metrics
+      survival_rates = [ep['survival_rate'] for ep in episodes]
+      food_collected = [ep['total_food_collected'] for ep in episodes]
+      avg_scores = [ep['avg_score'] for ep in episodes]
+      
+      metrics = {
+          'total_episodes': len(episodes),
+          'avg_survival_rate': statistics.mean(survival_rates) if survival_rates else 0,
+          'max_survival_rate': max(survival_rates) if survival_rates else 0,
+          'avg_food_per_episode': statistics.mean(food_collected) if food_collected else 0,
+          'total_food_collected': sum(food_collected),
+          'learning_trend': 'improving' if len(survival_rates) > 1 and survival_rates[-1] > survival_rates[0] else 'stable',
+          'best_episode': max(episodes, key=lambda x: x['survival_rate'])['episode'] if episodes else 0
+      }
+      
+      # Save metrics
+      with open('metrics.json', 'w') as f:
+          json.dump(metrics, f, indent=2)
+      
+      print("Metrics calculated successfully")
+    outputFiles:
+      - metrics.json
+
+  # Task 4: AI Agent Analysis using Claude (Kestra $4K Prize Feature)
+  - id: ai_strategy_analysis
+    type: io.kestra.plugin.ai.agent.AIAgent
+    description: "Use Claude AI to analyze agent survival strategies"
+    agent:
+      provider: anthropic
+      model: claude-sonnet-4-20250514
+      apiKey: "{{ secret('ANTHROPIC_API_KEY') }}" 
+      # AIzaSyB0mwIHRVH4b_l_ZNd7Kc3pZMpPmqL3V6w
+      temperature: 0.7
+      maxTokens: 2000
+    
+    systemPrompt: |
+      You are an expert AI researcher analyzing reinforcement learning agents.
+      Your task is to identify successful survival strategies based on episode data.
+      Focus on: learning patterns, food collection efficiency, obstacle avoidance, and exploration-exploitation balance.
+    
+    userPrompt: |
+      Analyze the following agent performance metrics and provide strategic insights:
+      
+      {{ outputs.calculate_metrics.outputFiles['metrics.json'] }}
+      
+      Please provide:
+      1. Key survival strategies that emerged
+      2. Learning progression analysis
+      3. Recommendations for improving agent performance
+      4. Comparison of top-performing vs struggling agents
+      
+      Format your response as a structured report suitable for a hackathon presentation.
+
+  # Task 5: Generate summary report
+  - id: generate_report
+    type: io.kestra.plugin.scripts.python.Script
+    description: "Create final HTML report"
+    containerImage: python:3.11-slim
+    script: |
+      import json
+      from datetime import datetime
+      
+      # Load metrics
+      with open('{{ outputs.calculate_metrics.outputFiles["metrics.json"] }}', 'r') as f:
+          metrics = json.load(f)
+      
+      # Get AI analysis
+      ai_analysis = """{{ outputs.ai_strategy_analysis.response }}"""
+      
+      # Generate HTML report
+      html = f"""
+      <!DOCTYPE html>
+      <html>
+      <head>
+          <title>AI Ecosystem Analysis Report</title>
+          <style>
+              body {{ font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }}
+              .container {{ max-width: 1000px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+              h1 {{ color: #1976d2; border-bottom: 3px solid #1976d2; padding-bottom: 10px; }}
+              h2 {{ color: #424242; margin-top: 30px; }}
+              .metric {{ display: inline-block; margin: 15px 20px; padding: 20px; background: #e3f2fd; border-radius: 8px; min-width: 200px; }}
+              .metric-value {{ font-size: 36px; font-weight: bold; color: #1976d2; }}
+              .metric-label {{ font-size: 14px; color: #666; margin-top: 5px; }}
+              .analysis {{ background: #f9f9f9; padding: 20px; border-left: 4px solid #4caf50; margin: 20px 0; }}
+              .timestamp {{ color: #999; font-size: 14px; }}
+          </style>
+      </head>
+      <body>
+          <div class="container">
+              <h1>🤖 AI Ecosystem Simulator - Analysis Report</h1>
+              <p class="timestamp">Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+              
+              <h2>Performance Metrics</h2>
+              <div class="metric">
+                  <div class="metric-value">{metrics['total_episodes']}</div>
+                  <div class="metric-label">Total Episodes</div>
+              </div>
+              <div class="metric">
+                  <div class="metric-value">{metrics['avg_survival_rate']:.1%}</div>
+                  <div class="metric-label">Avg Survival Rate</div>
+              </div>
+              <div class="metric">
+                  <div class="metric-value">{metrics['max_survival_rate']:.1%}</div>
+                  <div class="metric-label">Peak Survival Rate</div>
+              </div>
+              <div class="metric">
+                  <div class="metric-value">{metrics['total_food_collected']}</div>
+                  <div class="metric-label">Total Food Collected</div>
+              </div>
+              
+              <h2>AI-Powered Strategy Analysis</h2>
+              <div class="analysis">
+                  <pre style="white-space: pre-wrap; font-family: Arial;">{ai_analysis}</pre>
+              </div>
+              
+              <h2>Learning Progress</h2>
+              <p><strong>Trend:</strong> {metrics['learning_trend'].upper()}</p>
+              <p><strong>Best Episode:</strong> #{metrics['best_episode']}</p>
+              
+              <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
+              <p style="text-align: center; color: #999;">
+                  Powered by Kestra AI Agent | Built for 48-hour Hackathon
+              </p>
+          </div>
+      </body>
+      </html>
+      """
+      
+      # Save report
+      with open('analysis_report.html', 'w') as f:
+          f.write(html)
+      
+      print("Report generated successfully!")
+    outputFiles:
+      - analysis_report.html
+
+  # Task 6: Store results
+  - id: save_results
+    type: io.kestra.plugin.fs.http.Upload
+    description: "Save analysis results"
+    from: "{{ outputs.generate_report.outputFiles['analysis_report.html'] }}"
+    to: "file://../data/latest_analysis.html"
+
+# Output the AI analysis for external access
+outputs:
+  - id: ai_insights
+    type: STRING
+    value: "{{ outputs.ai_strategy_analysis.response }}"
+  
+  - id: report_path
+    type: STRING
+    value: "{{ outputs.save_results.uri }}"
+
+# Error handling
+errors:
+  - id: handle_errors
+    type: io.kestra.core.tasks.log.Log
+    message: "Analysis failed: {{ error.message }}"
+    level: ERROR

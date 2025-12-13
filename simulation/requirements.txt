@@ -1,0 +1,8 @@
+gymnasium==0.29.1
+numpy
+python-socketio[client]==5.10.0
+python-engineio==4.8.0
+
+# For production Oumi integration (optional during hackathon)
+oumi
+torch
