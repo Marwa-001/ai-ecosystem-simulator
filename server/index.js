@@ -1,6 +1,6 @@
 /**
- * Socket.io Bridge Server - FIXED VERSION
- * Key fix: Check both query params AND auth for client type
+ * Socket.io Bridge Server - FIXED EVENT NAMES
+ * Key fix: Consistent event names between Python -> Server -> React
  */
 
 const express = require('express');
@@ -37,6 +37,7 @@ app.get('/health', (req, res) => {
     status: 'healthy',
     clients: connectedClients,
     pythonConnected,
+    episodeHistoryLength: episodeHistory.length,
     uptime: process.uptime()
   });
 });
@@ -49,32 +50,21 @@ app.get('/api/history', (req, res) => {
 });
 
 io.on('connection', (socket) => {
-  // FIXED: Check multiple places for client type
   const clientType = 
     socket.handshake.query.type || 
     socket.handshake.auth?.type || 
     'unknown';
   
   console.log(`✅ Client connected: ${socket.id} (${clientType})`);
-  console.log(`   Query params:`, socket.handshake.query);
-  console.log(`   Auth:`, socket.handshake.auth);
   connectedClients++;
 
   if (clientType === 'python') {
     pythonConnected = true;
-    console.log('🐍🐍🐍 Python simulation connected!');
-    console.log('   Now listening for simulation_update events...');
+    console.log('🐍 Python simulation connected!');
     
     // Receive simulation updates from Python
     socket.on('simulation_update', (data) => {
-      console.log(`📊 Received update from Python:`, {
-        episode: data.episode,
-        step: data.step,
-        agents: data.agents?.length,
-        food: data.food?.length,
-        obstacles: data.obstacles?.length,
-        survival_rate: data.survival_rate
-      });
+      console.log(`📊 Simulation update - Episode ${data.episode}, Step ${data.step}`);
       
       latestSimulationState = {
         ...data,
@@ -82,20 +72,27 @@ io.on('connection', (socket) => {
       };
       
       // Broadcast to all React clients
-      const clientCount = socket.broadcast.emit('state_update', latestSimulationState);
-      console.log(`   ✓ Broadcasted to ${io.sockets.sockets.size - 1} client(s)`);
+      socket.broadcast.emit('state_update', latestSimulationState);
     });
     
     // Receive episode completion data
     socket.on('episode_complete', (data) => {
+      console.log(`✅ Episode ${data.episode} complete!`);
+      console.log(`   Survival: ${(data.survival_rate * 100).toFixed(1)}%`);
+      console.log(`   Cooperations: ${data.cooperation_events}`);
+      console.log(`   Thefts: ${data.theft_events}`);
+      console.log(`   Alliances: ${data.num_alliances}`);
+      
       episodeHistory.push(data);
       
       if (episodeHistory.length > 100) {
         episodeHistory = episodeHistory.slice(-100);
       }
       
-      socket.broadcast.emit('episode_summary', data);
-      console.log(`📊 Episode ${data.episode} complete - Survival: ${(data.survival_rate * 100).toFixed(1)}%`);
+      // Broadcast as 'episode_complete' to React clients
+      const broadcastCount = socket.broadcast.emit('episode_complete', data);
+      console.log(`   ✓ Broadcasted to ${io.sockets.sockets.size - 1} client(s)`);
+      console.log(`   ✓ Total episodes in history: ${episodeHistory.length}`);
     });
     
     // Send confirmation back to Python
@@ -115,19 +112,26 @@ io.on('connection', (socket) => {
     }
     
     // Send episode history
-    socket.emit('history_update', episodeHistory.slice(-20));
+    if (episodeHistory.length > 0) {
+      console.log(`   Sending ${episodeHistory.length} episodes from history...`);
+      // Send each episode individually to trigger the UI update
+      episodeHistory.slice(-20).forEach(episode => {
+        socket.emit('episode_complete', episode);
+      });
+    }
     
     // Handle requests for updates
     socket.on('request_update', () => {
+      console.log('   React client requested update');
       if (latestSimulationState) {
         socket.emit('state_update', latestSimulationState);
       }
+      if (episodeHistory.length > 0) {
+        episodeHistory.slice(-20).forEach(episode => {
+          socket.emit('episode_complete', episode);
+        });
+      }
     });
-  }
-
-  if (clientType === 'unknown') {
-    console.log('⚠️  Unknown client type - connection may not work properly');
-    console.log('   Make sure to pass type in query params or auth');
   }
 
   socket.on('disconnect', (reason) => {
@@ -145,12 +149,12 @@ io.on('connection', (socket) => {
   });
 });
 
-// Periodic cleanup
+// Periodic status log
 setInterval(() => {
-  if (episodeHistory.length > 100) {
-    episodeHistory = episodeHistory.slice(-100);
+  if (connectedClients > 0 || episodeHistory.length > 0) {
+    console.log(`📊 Status: ${connectedClients} clients | Python: ${pythonConnected ? '✓' : '✗'} | Episodes: ${episodeHistory.length}`);
   }
-}, 60000);
+}, 30000);
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
