@@ -247,7 +247,7 @@ export default function DashboardSocial() {
         boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
       }}>
         <h1 style={{ margin: 0, color: '#1976d2', fontSize: '32px' }}>
-          🌟 AI Ecosystem with Social Interactions
+           AI Ecosystem with Social Interactions
         </h1>
         <div style={{ marginTop: '10px', display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
           <span style={{ 
@@ -430,7 +430,7 @@ export default function DashboardSocial() {
         borderRadius: '8px',
         boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
       }}>
-        <h3 style={{ margin: '0 0 10px 0', color: '#333' }}>🌟 Social Dynamics</h3>
+        <h3 style={{ margin: '0 0 10px 0', color: '#333' }}> Social Dynamics</h3>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
           <div>
             <h4 style={{ color: '#4caf50', margin: '0 0 5px 0' }}>🤝 Cooperative Agents</h4>
