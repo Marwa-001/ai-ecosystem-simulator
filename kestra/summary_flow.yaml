@@ -79,8 +79,7 @@ tasks:
     agent:
       provider: anthropic
       model: claude-sonnet-4-20250514
-      apiKey: "{{ secret('ANTHROPIC_API_KEY') }}" 
-      # AIzaSyB0mwIHRVH4b_l_ZNd7Kc3pZMpPmqL3V6w
+      apiKey: "{{ secret('ANTHROPIC_API_KEY') }}"
       temperature: 0.7
       maxTokens: 2000
     
