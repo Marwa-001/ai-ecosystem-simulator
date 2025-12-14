@@ -12,13 +12,13 @@ const app = express();
 const httpServer = createServer(app);
 
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:3000',
+  origin: "*",
   credentials: true
 }));
 
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:3000',
+    origin: "*",
     methods: ['GET', 'POST'],
     credentials: true
   },
